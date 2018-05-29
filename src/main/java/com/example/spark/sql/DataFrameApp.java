@@ -37,8 +37,15 @@ public class DataFrameApp {
         // Select people older than 21
         df.filter(df.col("age").gt(21)).show();
 
-        // save
+        // Save
         df.javaRDD().saveAsTextFile("file:///usr/local/spark/people.txt");
+
+        // Creates a temporary view using the DataFrame
+        df.createOrReplaceTempView("people");
+        // SQL can be run over a temporary view created using DataFrames
+        Dataset<Row> results  = spark.sql("select name from people");
+        // Displays the content of the DataFrame to stdout
+        results.show();
 
         // close
         spark.close();
