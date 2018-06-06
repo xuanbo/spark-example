@@ -1,14 +1,18 @@
-package com.example.spark.streaming;
+package com.example.spark.streaming.kafka;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka010.CanCommitOffsets;
 import org.apache.spark.streaming.kafka010.ConsumerStrategies;
+import org.apache.spark.streaming.kafka010.HasOffsetRanges;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
+import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
@@ -22,7 +26,7 @@ import java.util.Map;
  * 从kafka中获取流，每10秒统计一次
  *
  * bash:
- * bin/spark-submit --class "com.example.spark.streaming.KafkaWordCountStreamingApp" spark-example-1.0-SNAPSHOT.jar
+ * bin/spark-submit --class "com.example.spark.streaming.kafka.KafkaWordCountStreamingApp" spark-example-1.0-SNAPSHOT.jar
  *
  * @author xuan
  * @since 1.0.0
@@ -53,16 +57,20 @@ public class KafkaWordCountStreamingApp {
                         ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams)
                 );
 
-        stream.map(ConsumerRecord::value)
-                .mapToPair(word -> new Tuple2<>(word, 1))
-                .reduceByKey((a, b) -> a + b)
-                .map(tuple -> tuple._1 + ": " + tuple._2)
-                // 存储，这里直接打印了
-                .foreachRDD(rdd -> {
-                    LOG.info("=============================");
-                    rdd.foreachPartition(partitionRecords -> partitionRecords.forEachRemaining(data -> LOG.info("data: {}", data)));
-                    LOG.info("=============================");
-                });
+        stream.foreachRDD(rdd -> {
+            // offsets
+            OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+
+            // calculation
+            rdd.map(ConsumerRecord::value)
+                    .mapToPair(word -> new Tuple2<>(word, 1))
+                    .reduceByKey((a, b) -> a + b)
+                    .map(tuple -> tuple._1 + ": " + tuple._2)
+                    .foreachPartition(results -> results.forEachRemaining(data -> LOG.info("data: {}", data)));
+
+            // Persist Offsets in Kafka
+            ((CanCommitOffsets) stream.inputDStream()).commitAsync(offsetRanges);
+        });
 
         ssc.start();
 

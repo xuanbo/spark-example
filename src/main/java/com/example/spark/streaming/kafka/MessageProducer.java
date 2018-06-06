@@ -1,4 +1,4 @@
-package com.example.spark.streaming;
+package com.example.spark.streaming.kafka;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
