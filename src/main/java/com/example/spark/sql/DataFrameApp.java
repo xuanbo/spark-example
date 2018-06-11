@@ -37,6 +37,9 @@ public class DataFrameApp {
         // Select people older than 21
         df.filter(df.col("age").gt(21)).show();
 
+        // GroupBy
+        df.groupBy(df.col("age")).count().show();
+
         // Save
         df.javaRDD().saveAsTextFile("file:///usr/local/spark/people.txt");
 
